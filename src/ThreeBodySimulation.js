@@ -1,13 +1,14 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Canvas, useFrame, extend } from '@react-three/fiber';
-import { OrbitControls, Line, Text } from '@react-three/drei';
+import { OrbitControls, Line, Text, Html } from '@react-three/drei';
 import * as THREE from 'three';
-import { useControls } from 'leva';
+import { useControls, button } from 'leva';
 
 extend({ Line_: THREE.Line });
 
-const Particle = ({ position, color }) => {
+const Particle = ({ position, color, mass }) => {
   const meshRef = useRef();
+  const size = Math.cbrt(mass) * 0.2;
 
   useFrame(() => {
     if (meshRef.current) {
@@ -17,8 +18,13 @@ const Particle = ({ position, color }) => {
 
   return (
     <mesh ref={meshRef}>
-      <sphereGeometry args={[0.2, 32, 32]} />
+      <sphereGeometry args={[size, 32, 32]} />
       <meshStandardMaterial color={color} />
+      <Html distanceFactor={10}>
+        <div style={{ backgroundColor: 'rgba(0,0,0,0.5)', color: 'white', padding: '2px 5px', borderRadius: '3px' }}>
+          Mass: {mass.toFixed(2)}
+        </div>
+      </Html>
     </mesh>
   );
 };
@@ -52,25 +58,52 @@ const ParticleSystem = () => {
     repelThreshold,
     trailLength,
     showForces,
-    timeStep
+    timeStep,
+    particleCount,
+    showOrbits,
+    pause
   } = useControls({
     G: { value: 0.5, min: 0, max: 2, step: 0.1 },
     useRepulsion: { value: true },
     repelThreshold: { value: 2, min: 0, max: 5, step: 0.1 },
     trailLength: { value: 100, min: 10, max: 500, step: 10 },
     showForces: true,
-    timeStep: { value: 0.01, min: 0.001, max: 0.1, step: 0.001 }
+    timeStep: { value: 0.01, min: 0.001, max: 0.1, step: 0.001 },
+    particleCount: { value: 3, min: 2, max: 10, step: 1 },
+    showOrbits: false,
+    pause: false,
+    resetSimulation: button(() => setParticles(generateInitialParticles(particleCount)))
   });
 
-  const [particles, setParticles] = useState([
-    { position: [2, 0, 0], velocity: [0, 0.1, 0], color: 'red', trail: [] },
-    { position: [-2, 0, 0], velocity: [0, -0.1, 0], color: 'green', trail: [] },
-    { position: [0, 2, 0], velocity: [0.1, 0, 0], color: 'blue', trail: [] },
-  ]);
+  const generateInitialParticles = (count) => {
+    return Array.from({ length: count }, (_, i) => ({
+      position: [
+        (Math.random() - 0.5) * 6,
+        (Math.random() - 0.5) * 6,
+        (Math.random() - 0.5) * 6
+      ],
+      velocity: [
+        (Math.random() - 0.5) * 0.2,
+        (Math.random() - 0.5) * 0.2,
+        (Math.random() - 0.5) * 0.2
+      ],
+      color: `hsl(${(i / count) * 360}, 100%, 50%)`,
+      mass: Math.random() * 2 + 0.5,
+      trail: []
+    }));
+  };
 
+  const [particles, setParticles] = useState(() => generateInitialParticles(particleCount));
   const [forces, setForces] = useState([]);
+  const [centerOfMass, setCenterOfMass] = useState([0, 0, 0]);
+
+  useEffect(() => {
+    setParticles(generateInitialParticles(particleCount));
+  }, [particleCount]);
 
   useFrame(() => {
+    if (pause) return;
+
     setParticles(prevParticles => {
       const newParticles = prevParticles.map((particle, i) => {
         let totalForce = [0, 0, 0];
@@ -84,7 +117,7 @@ const ParticleSystem = () => {
             const distanceSquared = dx * dx + dy * dy + dz * dz;
             const distance = Math.sqrt(distanceSquared);
 
-            let force = G / distanceSquared;
+            let force = G * particle.mass * otherParticle.mass / distanceSquared;
             if (useRepulsion && distance < repelThreshold) {
               force *= -1;
             }
@@ -103,9 +136,9 @@ const ParticleSystem = () => {
               particleForces.push({
                 start: particle.position,
                 end: [
-                  particle.position[0] + forceVector[0] * 10,
-                  particle.position[1] + forceVector[1] * 10,
-                  particle.position[2] + forceVector[2] * 10
+                  particle.position[0] + forceVector[0] * 10 / particle.mass,
+                  particle.position[1] + forceVector[1] * 10 / particle.mass,
+                  particle.position[2] + forceVector[2] * 10 / particle.mass
                 ],
                 color: useRepulsion && distance < repelThreshold ? 'purple' : 'yellow'
               });
@@ -113,10 +146,16 @@ const ParticleSystem = () => {
           }
         });
 
+        const acceleration = [
+          totalForce[0] / particle.mass,
+          totalForce[1] / particle.mass,
+          totalForce[2] / particle.mass
+        ];
+
         const newVelocity = [
-          particle.velocity[0] + totalForce[0] * timeStep,
-          particle.velocity[1] + totalForce[1] * timeStep,
-          particle.velocity[2] + totalForce[2] * timeStep
+          particle.velocity[0] + acceleration[0] * timeStep,
+          particle.velocity[1] + acceleration[1] * timeStep,
+          particle.velocity[2] + acceleration[2] * timeStep
         ];
 
         const newPosition = [
@@ -139,6 +178,15 @@ const ParticleSystem = () => {
       const newForces = newParticles.flatMap(particle => particle.forces);
       setForces(newForces);
 
+      // Calculate center of mass
+      const totalMass = newParticles.reduce((sum, p) => sum + p.mass, 0);
+      const com = newParticles.reduce((sum, p) => [
+        sum[0] + p.position[0] * p.mass / totalMass,
+        sum[1] + p.position[1] * p.mass / totalMass,
+        sum[2] + p.position[2] * p.mass / totalMass
+      ], [0, 0, 0]);
+      setCenterOfMass(com);
+
       return newParticles;
     });
   });
@@ -147,33 +195,39 @@ const ParticleSystem = () => {
     <>
       {particles.map((particle, index) => (
         <React.Fragment key={index}>
-          <Particle position={particle.position} color={particle.color} />
-          <Trail positions={particle.trail} color={particle.color} />
+          <Particle position={particle.position} color={particle.color} mass={particle.mass} />
+          {showOrbits && <Trail positions={particle.trail} color={particle.color} />}
         </React.Fragment>
       ))}
       {showForces && forces.map((force, index) => (
         <Force key={index} {...force} />
       ))}
+      <mesh position={centerOfMass}>
+        <sphereGeometry args={[0.1, 32, 32]} />
+        <meshBasicMaterial color="white" />
+      </mesh>
+      <Line points={[new THREE.Vector3(0, 0, 0), new THREE.Vector3(...centerOfMass)]} color="white" lineWidth={1} />
     </>
   );
 };
 
 const ThreeBodySimulation = () => {
   return (
-    <Canvas camera={{ position: [0, 0, 10] }}>
+    <Canvas camera={{ position: [10, 10, 10], fov: 60 }}>
       <ambientLight intensity={0.5} />
       <pointLight position={[10, 10, 10]} />
       <ParticleSystem />
       <OrbitControls />
       <Text
-        position={[0, 3.5, 0]}
+        position={[0, 5, 0]}
         fontSize={0.5}
         color="white"
         anchorX="center"
         anchorY="middle"
       >
-        Three Body Simulation
+        3D N-Body Simulation
       </Text>
+      <axesHelper args={[5]} />
     </Canvas>
   );
 };
