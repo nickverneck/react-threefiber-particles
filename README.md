@@ -46,19 +46,23 @@ Ensure you have [Node.js](https://nodejs.org/) installed. This project was boots
 
    ```bash
    git clone https://github.com/nickverneck/react-threefiber-particles.git
+   ```
 
 2. Navigate to the project directory: 
      ```bash
     cd react-threefiber-particles
+    ```
 
 3. Install the required dependencies:
      ```bash
      npm install
+     ```
 
 ### Running the Simulation
 To start the development server, run:
-    ```bash
-    npm start
+        ```
+        npm start
+        ```
 
 Open http://localhost:3000 to view the simulation in your browser. The app will automatically reload if you make edits. You will also see any lint errors in the console.
 
