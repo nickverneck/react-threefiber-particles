@@ -69,7 +69,7 @@ const ParticleSystem = () => {
     trailLength: { value: 100, min: 10, max: 500, step: 10 },
     showForces: true,
     timeStep: { value: 0.01, min: 0.001, max: 0.1, step: 0.001 },
-    particleCount: { value: 3, min: 2, max: 10, step: 1 },
+    particleCount: { value: 3, min: 2, max: 100, step: 1 },
     showOrbits: false,
     pause: false,
     resetSimulation: button(() => setParticles(generateInitialParticles(particleCount)))
