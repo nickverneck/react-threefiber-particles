@@ -5,8 +5,15 @@ import * as THREE from 'three';
 import { useControls, button } from 'leva';
 
 extend({ Line_: THREE.Line });
-
-const Particle = ({ position, color, mass }) => {
+const WireframeBackground = () => {
+  return (
+    <mesh>
+      <sphereGeometry args={[50, 32, 32]} />
+      <meshBasicMaterial color="white" wireframe={true} transparent={true} opacity={0.1} />
+    </mesh>
+  );
+};
+const Particle = ({ position, color, mass, glow }) => {
   const meshRef = useRef();
   const size = Math.cbrt(mass) * 0.2;
 
@@ -19,7 +26,12 @@ const Particle = ({ position, color, mass }) => {
   return (
     <mesh ref={meshRef}>
       <sphereGeometry args={[size, 32, 32]} />
-      <meshStandardMaterial color={color} />
+      <meshPhongMaterial 
+        color={color} 
+        emissive={glow ? color : 'black'} 
+        emissiveIntensity={glow ? 0.5 : 0}
+        shininess={glow ? 15 : 0}
+      />
       <Html distanceFactor={10}>
         <div style={{ backgroundColor: 'rgba(0,0,0,0.5)', color: 'white', padding: '2px 5px', borderRadius: '3px' }}>
           Mass: {mass.toFixed(2)}
@@ -61,7 +73,8 @@ const ParticleSystem = () => {
     timeStep,
     particleCount,
     showOrbits,
-    pause
+    pause,
+    glowingParticles
   } = useControls({
     G: { value: 0.5, min: 0, max: 2, step: 0.1 },
     useRepulsion: { value: true },
@@ -72,6 +85,7 @@ const ParticleSystem = () => {
     particleCount: { value: 3, min: 2, max: 100, step: 1 },
     showOrbits: false,
     pause: false,
+    glowingParticles: true,
     resetSimulation: button(() => setParticles(generateInitialParticles(particleCount)))
   });
 
@@ -195,7 +209,12 @@ const ParticleSystem = () => {
     <>
       {particles.map((particle, index) => (
         <React.Fragment key={index}>
-          <Particle position={particle.position} color={particle.color} mass={particle.mass} />
+          <Particle 
+            position={particle.position} 
+            color={particle.color} 
+            mass={particle.mass} 
+            glow={glowingParticles}
+          />
           {showOrbits && <Trail positions={particle.trail} color={particle.color} />}
         </React.Fragment>
       ))}
@@ -214,6 +233,8 @@ const ParticleSystem = () => {
 const ThreeBodySimulation = () => {
   return (
     <Canvas camera={{ position: [10, 10, 10], fov: 60 }}>
+    <color attach="background" args={['black']} />
+    <WireframeBackground />
       <ambientLight intensity={0.5} />
       <pointLight position={[10, 10, 10]} />
       <ParticleSystem />
@@ -227,7 +248,7 @@ const ThreeBodySimulation = () => {
       >
         3D N-Body Simulation
       </Text>
-      <axesHelper args={[5]} />
+      
     </Canvas>
   );
 };
